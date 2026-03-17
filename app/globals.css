@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 2026-03-17: Estilos profesionales para el apartado Beca SEP */
+@layer components {
+  .beca-input {
+    @apply w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm transition-colors placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20;
+  }
+  .beca-label {
+    @apply mb-1.5 block text-sm font-medium text-slate-600;
+  }
+  .beca-card {
+    @apply overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm transition-shadow hover:shadow-md;
+  }
+  .beca-btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-60;
+  }
+  .beca-btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-60;
+  }
+  .beca-btn-accent {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-60;
+  }
+  .beca-result-box {
+    @apply max-h-72 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/80 p-4 font-mono text-xs leading-relaxed text-slate-700;
+  }
+}
+
+@keyframes beca-toast-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.beca-toast-enter {
+  animation: beca-toast-in 0.3s ease-out;
+}
+
+/* 2026-03-17: Pestañas Becas SEP */
+.beca-tab {
+  @apply relative px-4 py-3 text-sm font-medium text-slate-600 transition-colors hover:text-slate-900;
+}
+.beca-tab-active {
+  @apply text-emerald-600;
+}
+.beca-tab-active::after {
+  content: '';
+  @apply absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600;
+}
