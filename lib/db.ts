@@ -1,6 +1,6 @@
 /**
  * 2025-03-17: Conexión MySQL compatible con Vercel (serverless).
- * Se crea una conexión por petición y se cierra al terminar para evitar agotar max_connections.
+ * 2026-03-19: Optimización de rendimiento con pool reutilizable para reducir latencia por handshake.
  * Si tu MySQL está en un hosting compartido, usa estas mismas credenciales que en phpMyAdmin.
  */
 
@@ -14,6 +14,14 @@ const config = {
   database: process.env.MYSQL_DATABASE,
 };
 
+// 2026-03-19: Pool global para reutilizar conexiones en peticiones consecutivas y mejorar tiempos de respuesta.
+const pool = mysql.createPool({
+  ...config,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+});
+
 export type Row = unknown[];
 
 /** Ejecuta una query y devuelve filas como arrays en orden de columnas (compatible con getResultSetJSON del PHP). */
@@ -21,16 +29,11 @@ export async function queryRows(
   sql: string,
   params: (string | number)[] = []
 ): Promise<Row[]> {
-  const conn = await mysql.createConnection(config);
-  try {
-    const [rows, fields] = await conn.execute(sql, params);
-    const ra = rows as Record<string, unknown>[];
-    const fa = (fields as { name: string }[]) || [];
-    if (fa.length === 0) return ra.map((r) => Object.values(r));
-    return ra.map((r) => fa.map((f) => r[f.name]));
-  } finally {
-    await conn.end();
-  }
+  const [rows, fields] = await pool.execute(sql, params);
+  const ra = rows as Record<string, unknown>[];
+  const fa = (fields as { name: string }[]) || [];
+  if (fa.length === 0) return ra.map((r) => Object.values(r));
+  return ra.map((r) => fa.map((f) => r[f.name]));
 }
 
 /** Una sola fila (compatible con getDataRow). */
@@ -64,14 +67,9 @@ export async function queryExecute(
   sql: string,
   params: (string | number)[] = []
 ): Promise<{ affectedRows: number }> {
-  const conn = await mysql.createConnection(config);
-  try {
-    const [result] = await conn.execute(sql, params);
-    const r = result as { affectedRows?: number };
-    return { affectedRows: r?.affectedRows ?? 0 };
-  } finally {
-    await conn.end();
-  }
+  const [result] = await pool.execute(sql, params);
+  const r = result as { affectedRows?: number };
+  return { affectedRows: r?.affectedRows ?? 0 };
 }
 
 /** Obtener ciclo escolar actual (regla 07-10 como en PHP). */

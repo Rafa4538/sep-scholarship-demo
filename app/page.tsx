@@ -5,7 +5,7 @@
  * Referencia: index.html becas_sep_panel. Estilos en globals.css (.beca-*, .beca-tab).
  */
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 type TabId = 'alumno' | 'reporte' | 'prorrateo' | 'preview' | 'guardar';
 
@@ -31,6 +31,8 @@ const MESES_CORTE = [
   { value: '26', label: 'Julio (11 meses)' },
 ];
 
+type ThemeMode = 'system' | 'light' | 'dark';
+
 function IconBeca() {
   return (
     <svg className="h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -43,6 +45,42 @@ function IconCheck() {
   return (
     <svg className="h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
+function LoadingDots() {
+  return (
+    <span className="beca-loading-dots" aria-hidden="true">
+      <span />
+      <span />
+      <span />
+    </span>
+  );
+}
+
+function IconSun() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <circle cx="12" cy="12" r="4" />
+      <path strokeLinecap="round" d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.64 5.64l1.77 1.77M16.59 16.59l1.77 1.77M18.36 5.64l-1.77 1.77M7.41 16.59l-1.77 1.77" />
+    </svg>
+  );
+}
+
+function IconMoon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 14.5A8.5 8.5 0 119.5 3a7 7 0 1011.5 11.5z" />
+    </svg>
+  );
+}
+
+function IconSystem() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <rect x="3" y="4" width="18" height="13" rx="2" />
+      <path strokeLinecap="round" d="M8 20h8M12 17v3" />
     </svg>
   );
 }
@@ -83,17 +121,91 @@ export default function BecaSepPage() {
   const [sepPorcentaje, setSepPorcentaje] = useState('');
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState('');
+  // 2026-03-19: Modo de tema premium con opción sistema/claro/oscuro e ícono de alternancia.
+  const [themeMode, setThemeMode] = useState<ThemeMode>('system');
+  const [isSystemDark, setIsSystemDark] = useState(false);
+  // 2026-03-19: Indicador global de actividad para reforzar feedback visual sin bloquear la UI.
+  const isAnyLoading = reportLoading || prorrateoLoading || previewLoading || saveLoading;
+  const resolvedTheme = useMemo<'light' | 'dark'>(
+    () => (themeMode === 'system' ? (isSystemDark ? 'dark' : 'light') : themeMode),
+    [isSystemDark, themeMode]
+  );
+
+  useEffect(() => {
+    // 2026-03-19: Inicializa preferencia persistida para evitar cambios bruscos entre sesiones.
+    const stored = window.localStorage.getItem('beca-sep-theme-mode');
+    if (stored === 'light' || stored === 'dark' || stored === 'system') {
+      setThemeMode(stored);
+    }
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const update = () => setIsSystemDark(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  useEffect(() => {
+    // 2026-03-19: Marca el tema resuelto a nivel documento para estilos oscuros de forma eficiente.
+    document.documentElement.dataset.theme = resolvedTheme;
+  }, [resolvedTheme]);
+
+  const cycleTheme = () => {
+    const next: ThemeMode =
+      themeMode === 'system' ? 'dark' : themeMode === 'dark' ? 'light' : 'system';
+    setThemeMode(next);
+    window.localStorage.setItem('beca-sep-theme-mode', next);
+  };
+
+  const currentThemeLabel =
+    themeMode === 'system' ? 'Auto' : themeMode === 'dark' ? 'Oscuro' : 'Claro';
 
   const showSuccess = (msg: string) => {
     setSuccessMessage(msg);
     setTimeout(() => setSuccessMessage(''), 3200);
   };
 
+  // 2026-03-19: Fetch robusto para redes lentas/inestables con timeout controlado y reintento corto.
+  const fetchWithRetry = async (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+    options?: { timeoutMs?: number; retries?: number; retryDelayMs?: number }
+  ) => {
+    const timeoutMs = options?.timeoutMs ?? 35000;
+    const retries = options?.retries ?? 1;
+    const retryDelayMs = options?.retryDelayMs ?? 800;
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(input, {
+          ...init,
+          signal: controller.signal,
+        });
+        if (!response.ok && response.status >= 500 && attempt < retries) {
+          await new Promise((resolve) => setTimeout(resolve, retryDelayMs * (attempt + 1)));
+          continue;
+        }
+        return response;
+      } catch (err) {
+        lastError = err;
+        if (attempt < retries) {
+          await new Promise((resolve) => setTimeout(resolve, retryDelayMs * (attempt + 1)));
+          continue;
+        }
+      } finally {
+        window.clearTimeout(timer);
+      }
+    }
+    throw lastError ?? new Error('Error de red');
+  };
+
   const handleReport = async () => {
     setReportError('');
     setReportLoading(true);
     try {
-      const res = await fetch(
+      const res = await fetchWithRetry(
         `/api/beca-sep/report?mes_corte=${mesCorte}&nivel_filtro=${nivelFiltro}&plan_filtro=${planFiltro}`
       );
       const contentType = res.headers.get('content-type');
@@ -110,7 +222,11 @@ export default function BecaSepPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      setReportError('Error de red o servidor.');
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        setReportError('La descarga tardó demasiado por la conexión. Intenta de nuevo.');
+      } else {
+        setReportError('Error de red o servidor. Verifica tu conexión e intenta de nuevo.');
+      }
     } finally {
       setReportLoading(false);
     }
@@ -121,7 +237,7 @@ export default function BecaSepPage() {
     setProrrateoResult('');
     setProrrateoLoading(true);
     try {
-      const res = await fetch('/api/beca-sep/prorrateo', {
+      const res = await fetchWithRetry('/api/beca-sep/prorrateo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ alumno_id: parseInt(alumnoId, 10) || 0 }),
@@ -130,7 +246,11 @@ export default function BecaSepPage() {
       if (data.ok) setProrrateoResult(data.message || '');
       else setProrrateoError(data.message || 'Error en prorrateo.');
     } catch (e) {
-      setProrrateoError('Error de red o servidor.');
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        setProrrateoError('La operación tardó demasiado por la conexión. Intenta nuevamente.');
+      } else {
+        setProrrateoError('Error de red o servidor. Verifica tu conexión e intenta de nuevo.');
+      }
     } finally {
       setProrrateoLoading(false);
     }
@@ -142,7 +262,7 @@ export default function BecaSepPage() {
     setPreviewLoading(true);
     try {
       const pctSepNum = previewPctSepInput.trim() ? parseFloat(previewPctSepInput.replace(/,/g, '.')) : undefined;
-      const res = await fetch('/api/beca-sep/preview', {
+      const res = await fetchWithRetry('/api/beca-sep/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -172,7 +292,11 @@ export default function BecaSepPage() {
         setPreviewBecaInterna(null);
       }
     } catch (e) {
-      setPreviewError('Error de red o servidor.');
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        setPreviewError('La previsualización excedió el tiempo esperado por la conexión. Intenta nuevamente.');
+      } else {
+        setPreviewError('Error de red o servidor. Verifica tu conexión e intenta de nuevo.');
+      }
     } finally {
       setPreviewLoading(false);
     }
@@ -182,7 +306,7 @@ export default function BecaSepPage() {
     setSaveError('');
     setSaveLoading(true);
     try {
-      const res = await fetch('/api/beca-sep/save', {
+      const res = await fetchWithRetry('/api/beca-sep/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -198,7 +322,11 @@ export default function BecaSepPage() {
       if (data.ok) showSuccess(data.message || 'Guardado correctamente.');
       else setSaveError(data.message || 'Error al guardar.');
     } catch (e) {
-      setSaveError('Error de red o servidor.');
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        setSaveError('Guardado cancelado por tiempo de espera. Intenta de nuevo.');
+      } else {
+        setSaveError('Error de red o servidor. Verifica tu conexión e intenta de nuevo.');
+      }
     } finally {
       setSaveLoading(false);
     }
@@ -207,7 +335,18 @@ export default function BecaSepPage() {
   const anioCompletoDisponible = prorrateoResult.includes('OTORGAR_ANIO_COMPLETO_DISPONIBLE=SI');
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100/80">
+    <main
+      className={`relative min-h-screen bg-gradient-to-b from-slate-50 to-slate-100/80 ${
+        resolvedTheme === 'dark' ? 'beca-theme-dark' : 'beca-theme-light'
+      }`}
+    >
+      {/* 2026-03-19: Fondos decorativos suaves para apariencia moderna con costo bajo (CSS puro). */}
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div className="beca-bg-glow beca-bg-glow-1" />
+        <div className="beca-bg-glow beca-bg-glow-2" />
+      </div>
+      {/* 2026-03-19: Barra de progreso indeterminada cuando hay operaciones activas. */}
+      {isAnyLoading && <div className="beca-top-loader" aria-hidden="true" />}
       {/* Toast de éxito */}
       {successMessage && (
         <div
@@ -221,7 +360,8 @@ export default function BecaSepPage() {
         </div>
       )}
 
-      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+      {/* 2026-03-19: Se amplía ancho máximo para aprovechar mejor pantallas grandes y reducir espacio lateral desperdiciado. */}
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-8 sm:px-6 lg:px-10 xl:px-12 2xl:px-16">
         {/* Cabecera + Pestañas */}
         <header className="mb-6">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
@@ -238,13 +378,22 @@ export default function BecaSepPage() {
                 </p>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={cycleTheme}
+              className="beca-theme-toggle"
+              title="Cambiar tema: Automático, Oscuro, Claro"
+            >
+              {themeMode === 'system' ? <IconSystem /> : themeMode === 'dark' ? <IconMoon /> : <IconSun />}
+              <span>{currentThemeLabel}</span>
+            </button>
           </div>
           {/* Barra de pestañas */}
           <nav
-            className="mt-6 border-b border-slate-200"
+            className="mt-5 rounded-xl border border-slate-200 bg-white/70 p-1.5 shadow-sm backdrop-blur"
             aria-label="Apartados Becas SEP"
           >
-            <div className="flex gap-1 overflow-x-auto pb-px">
+            <div className="flex gap-1.5 overflow-x-auto">
               {TABS.map((tab) => (
                 <button
                   key={tab.id}
@@ -267,15 +416,16 @@ export default function BecaSepPage() {
           {activeTab === 'alumno' && (
             <section
               id="panel-alumno"
-              className="beca-card border-l-4 border-l-slate-400 p-6"
+              className="beca-card beca-panel-enter border-l-4 border-l-slate-400 p-6"
               role="tabpanel"
               aria-labelledby="tab-alumno"
             >
               <h2 className="mb-4 text-base font-semibold text-slate-800">
                 Datos del alumno
               </h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div>
+              {/* 2026-03-19: Retícula uniforme por columnas para alinear espacios entre campos de forma consistente. */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-12">
+                <div className="xl:col-span-3">
                   <label className="beca-label">ID alumno</label>
                   <input
                     type="text"
@@ -285,7 +435,7 @@ export default function BecaSepPage() {
                     placeholder="Ej. 123"
                   />
                 </div>
-                <div>
+                <div className="xl:col-span-3">
                   <label className="beca-label">No. de control</label>
                   <input
                     type="text"
@@ -295,17 +445,17 @@ export default function BecaSepPage() {
                     placeholder="Ej. 11479"
                   />
                 </div>
-                <div>
+                <div className="xl:col-span-3">
                   <label className="beca-label">Ciclo escolar</label>
                   <input
                     type="text"
                     value={sepCe}
                     onChange={(e) => setSepCe(e.target.value)}
-                    className="beca-input w-24"
+                    className="beca-input"
                     placeholder="25"
                   />
                 </div>
-                <div>
+                <div className="xl:col-span-3">
                   <label className="beca-label">Fecha inicio</label>
                   <input
                     type="date"
@@ -314,6 +464,15 @@ export default function BecaSepPage() {
                     className="beca-input"
                   />
                 </div>
+                <div className="sm:col-span-2 xl:col-span-12">
+                  {/* 2026-03-19: Panel de ayuda compacto para ocupar ancho extra en resoluciones grandes. */}
+                  <div className="h-full rounded-lg border border-slate-200/80 bg-slate-50/70 p-3 text-xs text-slate-600">
+                    <p className="font-semibold text-slate-700">Tip rápido</p>
+                    <p className="mt-1">
+                      Usa este bloque como referencia y cambia de pestaña para continuar el flujo sin perder datos.
+                    </p>
+                  </div>
+                </div>
               </div>
             </section>
           )}
@@ -321,14 +480,14 @@ export default function BecaSepPage() {
           {activeTab === 'reporte' && (
             <section
               id="panel-reporte"
-              className="beca-card border-l-4 border-l-blue-500 p-6"
+              className="beca-card beca-panel-enter border-l-4 border-l-blue-500 p-6"
               role="tabpanel"
               aria-labelledby="tab-reporte"
             >
               <h2 className="mb-4 text-base font-semibold text-slate-800">
                 Reporte global CSV
               </h2>
-              <div className="flex flex-wrap items-end gap-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
                 <div className="min-w-[140px]">
                   <label className="beca-label">Mes de corte</label>
                   <select
@@ -367,14 +526,30 @@ export default function BecaSepPage() {
                     <option value="2">11 meses</option>
                   </select>
                 </div>
-                <button
-                  onClick={handleReport}
-                  disabled={reportLoading}
-                  className="beca-btn-secondary"
-                >
-                  {reportLoading ? 'Generando…' : 'Descargar CSV'}
-                </button>
+                <div className="sm:col-span-2 lg:col-span-1 xl:col-span-2 flex items-end">
+                  <button
+                    onClick={handleReport}
+                    disabled={reportLoading}
+                    className="beca-btn-secondary w-full xl:w-auto"
+                  >
+                    {reportLoading ? (
+                      <>
+                        Generando
+                        <LoadingDots />
+                      </>
+                    ) : (
+                      'Descargar CSV'
+                    )}
+                  </button>
+                </div>
               </div>
+              {/* 2026-03-19: Skeleton ligero para mostrar trabajo en progreso durante generación de reporte. */}
+              {reportLoading && (
+                <div className="mt-4 grid gap-2">
+                  <div className="beca-skeleton h-3 w-10/12" />
+                  <div className="beca-skeleton h-3 w-8/12" />
+                </div>
+              )}
               {reportError && (
                 <p className="mt-3 text-sm text-red-600">{reportError}</p>
               )}
@@ -384,15 +559,16 @@ export default function BecaSepPage() {
           {activeTab === 'prorrateo' && (
             <section
               id="panel-prorrateo"
-              className="beca-card border-l-4 border-l-violet-500 p-6"
+              className="beca-card beca-panel-enter border-l-4 border-l-violet-500 p-6"
               role="tabpanel"
               aria-labelledby="tab-prorrateo"
             >
               <h2 className="mb-4 text-base font-semibold text-slate-800">
                 Prorrateo por alumno
               </h2>
-              <div className="flex flex-wrap items-end gap-4">
-                <div className="w-36">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+                {/* 2026-03-19: Ancho ampliado para mantener proporción visual del primer campo en Prorrateo. */}
+                <div className="min-w-[220px]">
                   <label className="beca-label">ID alumno</label>
                   <input
                     type="number"
@@ -402,14 +578,30 @@ export default function BecaSepPage() {
                     placeholder="123"
                   />
                 </div>
-                <button
-                  onClick={handleProrrateo}
-                  disabled={prorrateoLoading}
-                  className="beca-btn-primary"
-                >
-                  {prorrateoLoading ? 'Calculando…' : 'Calcular prorrateo'}
-                </button>
+                <div className="sm:col-span-1 lg:col-span-2 xl:col-span-2 flex items-end">
+                  <button
+                    onClick={handleProrrateo}
+                    disabled={prorrateoLoading}
+                    className="beca-btn-primary w-full xl:w-auto"
+                  >
+                    {prorrateoLoading ? (
+                      <>
+                        Calculando
+                        <LoadingDots />
+                      </>
+                    ) : (
+                      'Calcular prorrateo'
+                    )}
+                  </button>
+                </div>
               </div>
+              {prorrateoLoading && (
+                <div className="mt-4 grid gap-2">
+                  <div className="beca-skeleton h-3 w-11/12" />
+                  <div className="beca-skeleton h-3 w-9/12" />
+                  <div className="beca-skeleton h-3 w-7/12" />
+                </div>
+              )}
               {prorrateoError && (
                 <p className="mt-3 text-sm text-red-600">{prorrateoError}</p>
               )}
@@ -442,15 +634,16 @@ export default function BecaSepPage() {
           {activeTab === 'preview' && (
             <section
               id="panel-preview"
-              className="beca-card border-l-4 border-l-amber-500 p-6"
+              className="beca-card beca-panel-enter border-l-4 border-l-amber-500 p-6"
               role="tabpanel"
               aria-labelledby="tab-preview"
             >
               <h2 className="mb-4 text-base font-semibold text-slate-800">
                 Previsualización
               </h2>
-              <div className="flex flex-wrap items-end gap-4">
-                <div className="w-36">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+                {/* 2026-03-19: Ancho ampliado para mejor proporción visual del campo No. de control en Previsualización. */}
+                <div className="min-w-[220px]">
                   <label className="beca-label">No. de control</label>
                   <input
                     type="text"
@@ -472,8 +665,9 @@ export default function BecaSepPage() {
                     ))}
                   </select>
                 </div>
-                <div className="w-28">
-                  <label className="beca-label">Porcentaje SEP (%)</label>
+                {/* 2026-03-19: Ajuste de ancho/label para evitar salto de línea y desalineación vertical en el campo de porcentaje. */}
+                <div className="min-w-[160px]">
+                  <label className="beca-label whitespace-nowrap">Porcentaje SEP (%)</label>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -484,13 +678,22 @@ export default function BecaSepPage() {
                     title="Opcional: ingrese el % para previsualizar con ese valor; si se deja vacío se usa el del registro."
                   />
                 </div>
-                <button
-                  onClick={handlePreview}
-                  disabled={previewLoading || !alumnoRef}
-                  className="beca-btn-accent"
-                >
-                  {previewLoading ? 'Calculando…' : 'Previsualizar'}
-                </button>
+                <div className="sm:col-span-2 lg:col-span-1 xl:col-span-2 flex items-end">
+                  <button
+                    onClick={handlePreview}
+                    disabled={previewLoading || !alumnoRef}
+                    className="beca-btn-accent w-full xl:w-auto"
+                  >
+                    {previewLoading ? (
+                      <>
+                        Calculando
+                        <LoadingDots />
+                      </>
+                    ) : (
+                      'Previsualizar'
+                    )}
+                  </button>
+                </div>
               </div>
               {/* 2026-03-17: Porcentaje beca SEP y beca interna tomados/verificados en BD para otros procesos */}
               {(previewPorcentajeSep != null || previewBecaInterna != null) && (
@@ -516,6 +719,13 @@ export default function BecaSepPage() {
               {previewError && (
                 <p className="mt-3 text-sm text-red-600">{previewError}</p>
               )}
+              {previewLoading && (
+                <div className="mt-4 grid gap-2">
+                  <div className="beca-skeleton h-3 w-10/12" />
+                  <div className="beca-skeleton h-3 w-8/12" />
+                  <div className="beca-skeleton h-16 w-full" />
+                </div>
+              )}
               {previewResult && (
                 <div className="mt-4">
                   <p className="beca-label">Vista previa</p>
@@ -530,14 +740,14 @@ export default function BecaSepPage() {
           {activeTab === 'guardar' && (
             <section
               id="panel-guardar"
-              className="beca-card border-l-4 border-l-emerald-500 p-6"
+              className="beca-card beca-panel-enter border-l-4 border-l-emerald-500 p-6"
               role="tabpanel"
               aria-labelledby="tab-guardar"
             >
               <h2 className="mb-4 text-base font-semibold text-slate-800">
                 Guardar beca SEP
               </h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 <div>
                   <label className="beca-label">No. de control</label>
                   <input
@@ -588,6 +798,11 @@ export default function BecaSepPage() {
                     placeholder="50"
                   />
                 </div>
+                <div className="sm:col-span-2 lg:col-span-1 xl:col-span-2 flex items-end">
+                  <div className="w-full rounded-lg border border-slate-200/80 bg-slate-50/70 px-3 py-2.5 text-xs text-slate-600">
+                    Al guardar, se actualiza o crea el registro SEP para el ciclo seleccionado.
+                  </div>
+                </div>
               </div>
               <div className="mt-5 flex items-center gap-3">
                 <button
@@ -595,7 +810,14 @@ export default function BecaSepPage() {
                   disabled={saveLoading || !alumnoRef}
                   className="beca-btn-primary"
                 >
-                  {saveLoading ? 'Guardando…' : 'Guardar beca SEP'}
+                  {saveLoading ? (
+                    <>
+                      Guardando
+                      <LoadingDots />
+                    </>
+                  ) : (
+                    'Guardar beca SEP'
+                  )}
                 </button>
                 {saveError && (
                   <p className="text-sm text-red-600">{saveError}</p>

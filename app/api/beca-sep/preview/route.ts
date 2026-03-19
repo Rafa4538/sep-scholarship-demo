@@ -127,13 +127,21 @@ export async function POST(request: NextRequest) {
   const colRestantes: string[] = [];
   const pagosAmounts: Record<string, number> = {};
   const pagosRawP: Record<string, number> = {};
+  // 2026-03-19: Optimización de rendimiento: agrupar pagos por mes en una sola consulta (evita N queries por alumno).
+  const pagosPorMesRaw = await queryRows(
+    `SELECT SUBSTR(pago_referencia,6,2) AS mes_c, COALESCE(SUM(pago_importe),0) AS total
+     FROM pago_detalle
+     WHERE alumno_id=${alumnoId}
+       AND SUBSTR(pago_referencia,8,2)='${ceStr}'
+       AND pago_cancelado!=1 AND pago_cancelado!=2
+     GROUP BY SUBSTR(pago_referencia,6,2)`
+  );
+  const pagosPorMesMap: Record<string, number> = {};
+  for (const row of pagosPorMesRaw) {
+    pagosPorMesMap[String(row[0])] = Number(row[1]) || 0;
+  }
   for (const m of mesesPlan) {
-    const pagoRaw =
-      Number(
-        await queryValue(
-          `SELECT COALESCE(SUM(pago_importe),0) FROM pago_detalle WHERE alumno_id=${alumnoId} AND SUBSTR(pago_referencia,6,2)='${m}' AND SUBSTR(pago_referencia,8,2)='${ceStr}' AND pago_cancelado!=1 AND pago_cancelado!=2`
-        )
-      ) || 0;
+    const pagoRaw = pagosPorMesMap[m] ?? 0;
     const pagoM = pagoRaw > 0 ? Math.min(pagoRaw, precioColFull) : 0;
     pagosAmounts[m] = pagoM;
     pagosRawP[m] = pagoRaw;
