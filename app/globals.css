@@ -265,13 +265,64 @@
   color: #6ee7b7 !important;
 }
 
+/* 2026-05-19: Banner de versión demo para portafolio (controlado por NEXT_PUBLIC_DEMO_MODE=true). */
+.beca-demo-banner {
+  position: sticky;
+  top: 0;
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  width: 100%;
+  padding: 0.55rem 1.25rem;
+  background: linear-gradient(90deg, #b45309 0%, #d97706 50%, #b45309 100%);
+  background-size: 200% 100%;
+  animation: beca-demo-slide 4s linear infinite;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(180, 83, 9, 0.35);
+}
+.beca-demo-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.beca-demo-hint {
+  opacity: 0.88;
+  font-size: 0.74rem;
+}
+.beca-demo-hint strong {
+  font-weight: 700;
+  background: rgba(255,255,255,0.18);
+  border-radius: 4px;
+  padding: 0 0.3rem;
+}
+@keyframes beca-demo-slide {
+  0%, 100% { background-position: 0% 0; }
+  50%       { background-position: 100% 0; }
+}
+
 /* 2026-03-19: Respeta accesibilidad y reduce consumo al desactivar animaciones cuando el usuario lo pide. */
 @media (prefers-reduced-motion: reduce) {
   .beca-toast-enter,
   .beca-panel-enter,
   .beca-top-loader::after,
   .beca-skeleton,
-  .beca-loading-dots > span {
+  .beca-loading-dots > span,
+  .beca-demo-banner {
     animation: none !important;
   }
 }

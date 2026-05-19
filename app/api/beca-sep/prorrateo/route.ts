@@ -183,7 +183,16 @@ export async function POST(request: NextRequest) {
     else colRestantes.push(m);
   }
   const nColPagadas = colPagadas.length;
-  const nColRestantes = colRestantes.length;
+  // 2026-03-19: Restantes = meses del plan posteriores al último pagado (equivale al corte real
+  // del alumno). Evita contar meses previos a inscripción tardía como pendientes.
+  let lastPaidPlanIdx = -1;
+  for (let i = mesesPlan.length - 1; i >= 0; i--) {
+    if ((pagosAmounts[mesesPlan[i]] ?? 0) > 0) { lastPaidPlanIdx = i; break; }
+  }
+  const colRestantesReal = lastPaidPlanIdx >= 0
+    ? mesesPlan.slice(lastPaidPlanIdx + 1)
+    : colRestantes;
+  const nColRestantes = colRestantesReal.length;
 
   const fechaPRaw = await queryRows(
     `SELECT SUBSTR(pago_referencia,6,2) AS mes_c, MAX(pago_fecha) AS f FROM pago_detalle WHERE alumno_id=${alumnoId} AND SUBSTR(pago_referencia,8,2)='${ceStr}' AND pago_cancelado!=1 AND pago_cancelado!=2 GROUP BY SUBSTR(pago_referencia,6,2)`
@@ -241,7 +250,7 @@ export async function POST(request: NextRequest) {
   const refsAnioCompleto: string[] = [];
   if (nColRestantes > 0) {
     if (excedente >= nColRestantes * precioColBeca) {
-      for (const m of colRestantes) {
+      for (const m of colRestantesReal) {
         refsAnioCompleto.push(alumnoRef + m + ceStr + '000');
       }
       const saldoFinal = Math.round((excedente - nColRestantes * precioColBeca) * 100) / 100;

@@ -149,8 +149,10 @@ async function runReport(
       pushCsv(['Colegiatura', formatMoney(colFull), 'Inscripcion', formatMoney(insFull)]);
       pushCsv([]);
       // 2026-03-17: Cabeceras alineadas con reporte esperado (Numeros de control, Beca actual, Pago actual realizado en mes, etc.)
+      // 2026-03-19: Se agrega columna de nombre del alumno junto al número de control para facilitar lectura del reporte.
       const header = [
         'Numeros de control',
+        'Nombre del alumno',
         'Beca actual',
         'Nivel educativo',
         'Porcentaje de Beca SEP',
@@ -198,6 +200,9 @@ async function runReport(
       pagosCol[m] = pagoM;
       if (pagoM > 0) paidCount++;
     }
+    // 2026-03-19: Restantes = meses del plan posteriores al mes de corte seleccionado en el reporte.
+    // corteMeses contiene los meses hasta el corte inclusive, la diferencia da los pendientes reales.
+    const mesesRestantes = mesesPlan.length - corteMeses.length;
 
     const corrRaw = await queryRows(
       `SELECT LPAD(pago_concepto,2,'0') FROM pago_prorroga WHERE alumno_id=${aluId} AND prorroga_ciclo_escolar=${ceActual} AND correccion=1`
@@ -222,7 +227,6 @@ async function runReport(
     const difCol = Number.isFinite(difColRaw) ? difColRaw : 0;
     const difIns = Number.isFinite(difInsRaw) ? difInsRaw : 0;
     const excTotal = difCol + difIns;
-    const mesesRestantes = nPlan - paidCount;
     const montoFinal =
       mesesRestantes > 0
         ? Math.max(0, Math.round((colBecaSep - excTotal / mesesRestantes) * 100) / 100)
@@ -230,6 +234,7 @@ async function runReport(
 
     const row = [
       aluRef,
+      aluNom,
       becaPct + '%',
       nivelNombreH,
       sepPorcentaje + '%',

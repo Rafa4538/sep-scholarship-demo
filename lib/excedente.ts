@@ -1,6 +1,8 @@
 /**
  * 2025-03-17: Cálculo de diferencia a favor (excedente) en colegiaturas para beca SEP.
  * Migrado desde callback_3.php - reglas día 10, recargos $75, correcciones, beca interna vs SEP.
+ * 2026-03-19: Corrección de bug en bloque corrección sin beca: no dar excedente si el pago real
+ *             es menor al precio con beca SEP (caso alumno de entrada tardía con pago parcial).
  */
 
 import {
@@ -98,6 +100,25 @@ export function calcExcedenteRef(params: ExcedenteParams): number | null {
     }
   }
   return null;
+}
+
+// 2026-03-19: Función auxiliar que centraliza la regla de corrección sin beca para evitar duplicar la lógica corregida.
+function calcContribCorreccionSinBeca(
+  pagoM: number,
+  col_full: number,
+  col_beca_sep: number,
+  tol: number
+): number {
+  if (Math.abs(pagoM - col_full) <= tol) {
+    // Pagó precio completo: excedente = col_full - col_beca_sep
+    return Math.max(0, col_full - col_beca_sep);
+  }
+  if (pagoM >= col_beca_sep - tol) {
+    // Pagó al menos el precio SEP: se contempla como pago completo para el prorrateo
+    return Math.max(0, col_full - col_beca_sep);
+  }
+  // Pagó menos que el precio con beca SEP → no hay excedente real a favor
+  return 0;
 }
 
 /**
@@ -218,12 +239,8 @@ export function calcDifCol(params: ExcedenteParams): number {
           difCol += Math.max(0, col_beca - col_beca_sep);
         }
       } else {
-        if (Math.abs(pagoM - col_full) <= 5) {
-          difCol += Math.max(0, col_full - col_beca_sep);
-        } else {
-          // 2026-03-17: Corrección sin beca = se contempla como pago completo para no afectar prorrateo (no usar excedenteRef).
-          difCol += Math.max(0, col_full - col_beca_sep);
-        }
+        // 2026-03-19: Usar helper corregido: solo da excedente si el pago cubre al menos col_beca_sep.
+        difCol += calcContribCorreccionSinBeca(pagoM, col_full, col_beca_sep, tol);
       }
       continue;
     }
@@ -280,12 +297,8 @@ export function calcDifCol(params: ExcedenteParams): number {
           difCol += Math.max(0, col_beca - col_beca_sep);
         }
       } else {
-        if (Math.abs(pagoM - col_full) <= 5) {
-          difCol += 0;
-        } else {
-          // 2026-03-17: Corrección sin beca = como pago completo para no afectar prorrateo.
-          difCol += Math.max(0, col_full - col_beca_sep);
-        }
+        // 2026-03-19: Mismo helper corregido en el segundo bloque de corrección.
+        difCol += calcContribCorreccionSinBeca(pagoM, col_full, col_beca_sep, tol);
       }
     } else {
       if (beca_pct > 0 && Math.abs(pagoM - col_beca) <= 5) {
@@ -445,13 +458,13 @@ export function calcDifColDesglose(
           tipoDesc = 'Corrección con beca interna';
         }
       } else {
-        if (Math.abs(pagoM - col_full) <= 5) {
-          contrib = Math.max(0, col_full - col_beca_sep);
+        // 2026-03-19: Solo dar excedente si el pago cubre al menos el precio con beca SEP.
+        // Si pagó menos (ej. alumno entrada tardía con pago parcial), no hay excedente real.
+        contrib = calcContribCorreccionSinBeca(pagoM, col_full, col_beca_sep, tol);
+        if (contrib > 0) {
           tipoDesc = 'Corrección sin beca (como completa)';
         } else {
-          // 2026-03-17: Corrección sin beca = se contempla como pago completo para no afectar prorrateo.
-          contrib = Math.max(0, col_full - col_beca_sep);
-          tipoDesc = 'Corrección sin beca (como completa)';
+          tipoDesc = 'Corrección (pago menor al precio SEP)';
         }
       }
       const contribSafe0 = Number.isFinite(contrib) ? contrib : 0;
@@ -559,13 +572,12 @@ export function calcDifColDesglose(
           tipoDesc = 'Corrección con beca interna';
         }
       } else {
-        if (Math.abs(pagoM - col_full) <= 5) {
-          contrib = 0;
-          tipoDesc = 'Corrección (pago completo)';
-        } else {
-          // 2026-03-17: Corrección sin beca = como pago completo para no afectar prorrateo.
-          contrib = Math.max(0, col_full - col_beca_sep);
+        // 2026-03-19: Mismo helper corregido en el segundo bloque de corrección.
+        contrib = calcContribCorreccionSinBeca(pagoM, col_full, col_beca_sep, tol);
+        if (contrib > 0) {
           tipoDesc = 'Corrección sin beca (como completa)';
+        } else {
+          tipoDesc = 'Corrección (pago menor al precio SEP)';
         }
       }
     } else {

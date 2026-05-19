@@ -149,9 +149,11 @@ export async function POST(request: NextRequest) {
     else colRestantes.push(m);
   }
   const nColPagadas = colPagadas.length;
-  // 2026-03-17: Pagadas hasta corte = solo meses del plan hasta mes_corte con pago; Restantes = plan - pagadas hasta corte (calca sistema antiguo).
   const nColPagadasHastaCorte = corteMeses.filter((m) => (pagosAmounts[m] ?? 0) > 0).length;
-  const nColRestantes = nColPlan - nColPagadasHastaCorte;
+  // 2026-03-19: Restantes = meses del plan posteriores al mes de colegiatura seleccionado.
+  // corteMeses ya contiene los meses hasta el corte inclusive, por lo que la diferencia
+  // con el total del plan da exactamente los meses pendientes a partir del mes seleccionado.
+  const nColRestantes = mesesPlan.length - corteMeses.length;
 
   const insPagada =
     Number(

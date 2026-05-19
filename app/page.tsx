@@ -360,6 +360,19 @@ export default function BecaSepPage() {
         </div>
       )}
 
+      {/* 2026-05-19: Banner identificador de versión demo para portafolio (solo visible si NEXT_PUBLIC_DEMO_MODE=true). */}
+      {process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && (
+        <div className="beca-demo-banner" role="status" aria-label="Versión demo">
+          <span className="beca-demo-badge">DEMO</span>
+          <span>
+            Versión demo con datos ficticios &mdash; Sistema de Gestión de Becas SEP
+          </span>
+          <span className="beca-demo-hint">
+            Alumnos: <strong>ANA01</strong> · <strong>LUI01</strong> · <strong>SOF01</strong>
+          </span>
+        </div>
+      )}
+
       {/* 2026-03-19: Se amplía ancho máximo para aprovechar mejor pantallas grandes y reducir espacio lateral desperdiciado. */}
       <div className="mx-auto w-full max-w-[1600px] px-4 py-8 sm:px-6 lg:px-10 xl:px-12 2xl:px-16">
         {/* Cabecera + Pestañas */}
