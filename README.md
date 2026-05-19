@@ -1,77 +1,176 @@
-# Beca SEP – Next.js + MySQL (Vercel)
+# 🎓 ScholarFlow – SEP Scholarship Proration Engine
 
-**2025-03-17:** Migración del módulo de reporte y prorrateo beca SEP desde PHP a Next.js, React, TypeScript y Tailwind. Conectado a MySQL (el mismo que usas en phpMyAdmin), desplegable en Vercel.
+Sistema demostrativo orientado a la automatización del cálculo y prorrateo de becas SEP.
 
-## ¿Es posible conectar Vercel a MySQL?
+El proyecto nace a partir de una problemática administrativa real donde el cálculo de ajustes de colegiaturas debía realizarse manualmente considerando historial de pagos, descuentos internos y redistribución de excedentes sobre mensualidades futuras.
 
-Sí. Tu base MySQL puede estar en tu propio servidor (donde usas phpMyAdmin), en un hosting compartido o en un servicio en la nube. Next.js se conecta por red usando las credenciales de MySQL (host, usuario, contraseña, base de datos).
+ScholarFlow automatiza este proceso mediante reglas de negocio y simulación de escenarios.
 
-**Importante:** El servidor donde está MySQL debe aceptar conexiones desde fuera (desde los servidores de Vercel). En muchos hostings hay que activar “acceso remoto a MySQL” o añadir las IPs de Vercel. Si tu MySQL solo acepta `localhost`, solo funcionará en local; en ese caso puedes usar un túnel (por ejemplo ngrok) o un proxy para desarrollo local.
+---
 
-## Requisitos
+## Tecnologías
 
-- Node.js 18+
-- Cuenta en Vercel (para desplegar)
-- MySQL con las tablas del sistema escolar (alumno, alumno_beca_sep, pago_detalle, pago_boucher_precio, pago_prorroga, etc.)
+- Next.js
+- React
+- TypeScript
+- Tailwind CSS
+- MySQL (Railway en demo)
+- Vercel
+- Cursor AI
+- Git
 
-## Instalación local
+---
+
+## Problema
+
+En procesos administrativos escolares el cálculo de becas SEP puede involucrar:
+
+- Historial de pagos previos
+- Becas internas
+- Becas SEP
+- Colegiaturas liquidadas
+- Pagos excedentes
+- Redistribución de descuentos
+
+Tradicionalmente este procedimiento puede realizarse manualmente.
+
+El objetivo del proyecto es automatizar la lógica de cálculo y generar escenarios de ajuste.
+
+---
+
+## Funcionalidades
+
+### Gestión de alumnos
+
+- Alta de alumnos demo
+- Configuración de colegiaturas
+- Asociación de becas SEP e internas
+
+### Gestión de pagos
+
+- Registro de pagos realizados
+- Historial de movimientos por mensualidad
+
+### Motor de prorrateo SEP
+
+El sistema calcula automáticamente:
+
+- Descuento SEP
+- Excedentes de pago
+- Diferencia acumulada
+- Redistribución sobre colegiaturas restantes
+- Ajuste final por mensualidad
+
+### Módulos de la app
+
+- **Previsualización** — desglose por mes y monto sugerido
+- **Prorrateo** — resumen por alumno
+- **Reporte CSV** — exportación masiva
+- **Guardar SEP** — alta/actualización de registro
+
+---
+
+## Ejemplo de simulación
+
+Entrada:
+
+- Colegiatura: $4,000
+- Beca SEP: 20%
+- Excedente pagado: $2,000
+- Colegiaturas restantes: 10
+
+Proceso:
+
+- Colegiatura ajustada: 4000 − 20% = **$3,200**
+- Excedente distribuido: 2000 ÷ 10 = **$200**
+
+Resultado:
+
+- Pago mensual ajustado = **$3,000**
+
+---
+
+## Arquitectura
+
+| Capa | Stack |
+|------|--------|
+| Frontend | Next.js + React + TypeScript |
+| UI | Tailwind CSS |
+| Persistencia | MySQL |
+| Deploy | Vercel |
+| Datos demo | Ficticios (`scripts/demo-seed.sql`) |
+
+---
+
+## Consideraciones
+
+Este proyecto utiliza únicamente datos ficticios.
+
+No contiene información institucional, registros reales ni estructuras de producción.
+
+Fue desarrollado como demostración técnica inspirada en experiencias de automatización administrativa.
+
+---
+
+## Instalación y demo
+
+Ver guía completa en **[docs/DEMO_DEPLOY.md](docs/DEMO_DEPLOY.md)**.
+
+Resumen:
 
 ```bash
-cd beca-sep-app
 npm install
-cp .env.local.example .env.local
-```
-
-Edita `.env.local` con los datos de tu MySQL (los mismos que usas en phpMyAdmin):
-
-```env
-MYSQL_HOST=tu-servidor.com
-MYSQL_PORT=3306
-MYSQL_USER=tu_usuario
-MYSQL_PASSWORD=tu_password
-MYSQL_DATABASE=tu_base_datos
-```
-
-Opcional: `CICLO_ESCOLAR_ACTUAL=25` (si no se define, se calcula por fecha con la regla 07-10).
-
-```bash
+cp .env.demo.example .env.local
+# Editar .env.local con credenciales MySQL (Railway)
 npm run dev
 ```
 
-Abre [http://localhost:3000](http://localhost:3000). Desde la interfaz puedes:
+Variables clave:
 
-- **Reporte global:** elegir mes de corte, nivel y plan, y descargar el CSV.
-- **Prorrateo por alumno:** escribir el ID del alumno y ver el resumen de prorrateo.
+- `MYSQL_*` — conexión a base de datos
+- `CICLO_ESCOLAR_ACTUAL=25` — ciclo del seed demo
+- `NEXT_PUBLIC_DEMO_MODE=true` — banner identificador de demo
 
-## Despliegue en Vercel
+Alumnos de prueba: **ANA01**, **LUI01**, **SOF01** (ciclo `25`).
 
-1. Sube el proyecto a GitHub y conéctalo a Vercel.
-2. En el proyecto de Vercel → **Settings → Environment Variables** añade las mismas variables que en `.env.local`:
-   - `MYSQL_HOST`
-   - `MYSQL_PORT`
-   - `MYSQL_USER`
-   - `MYSQL_PASSWORD`
-   - `MYSQL_DATABASE`
-   - (opcional) `CICLO_ESCOLAR_ACTUAL`
-3. Redeploy. Las API routes (`/api/beca-sep/report`, `/api/beca-sep/prorrateo`) usarán esas variables.
-
-Asegúrate de que el firewall o la configuración de tu MySQL permita conexiones desde las IPs de Vercel (o desde cualquier IP si tu proveedor lo permite).
+---
 
 ## APIs
 
-- **GET o POST `/api/beca-sep/report`**  
-  Parámetros: `mes_corte` (01–10, 26), `nivel_filtro` (0–4), `plan_filtro` (0–2).  
-  Respuesta: CSV para descarga (mismo formato que el reporte PHP).
+- **GET/POST** `/api/beca-sep/report` — reporte CSV
+- **POST** `/api/beca-sep/prorrateo` — prorrateo por `alumno_id`
+- **POST** `/api/beca-sep/preview` — previsualización por `alumno_ref`
+- **POST** `/api/beca-sep/save` — guardar beca SEP
 
-- **POST `/api/beca-sep/prorrateo`**  
-  Body: `{ "alumno_id": 123 }`.  
-  Respuesta: JSON con el texto del resumen de prorrateo y, si aplica, referencias para “Otorgar año completo”.
+---
 
-## Estructura
+## Estado del proyecto
 
-- `lib/db.ts` – Conexión MySQL (una conexión por petición, compatible con serverless).
-- `lib/constants.ts` – Nombres de meses/niveles, conceptos día 10, etc.
-- `lib/excedente.ts` – Cálculo de diferencia a favor (excedente) en colegiaturas.
-- `app/api/beca-sep/report/route.ts` – Genera el reporte CSV.
-- `app/api/beca-sep/prorrateo/route.ts` – Calcula el prorrateo por alumno.
-- `app/page.tsx` – Interfaz con Tailwind para reporte y prorrateo.
+En desarrollo activo.
+
+Próximas funcionalidades:
+
+- Historial de simulaciones
+- Exportación PDF
+- Dashboard analítico
+- Escenarios múltiples
+
+---
+
+## 🤖 Desarrollo asistido por IA
+
+Herramientas: Cursor AI, ChatGPT.
+
+---
+
+## 🌐 Demo
+
+Despliegue en Vercel con MySQL en Railway. Ver [docs/DEMO_DEPLOY.md](docs/DEMO_DEPLOY.md).
+
+---
+
+## 👨‍💻 Autor
+
+**Rafael de Jesús Salazar García**
+
+Ingeniero en Sistemas Computacionales — automatización de procesos y desarrollo Full Stack.
